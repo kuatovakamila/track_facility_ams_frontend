@@ -92,7 +92,7 @@ export default function Register() {
 
           <p className="text-center text-sm text-gray-400">
             Уже есть аккаунт?{" "}
-            <a href="/" className="text-blue-400 hover:underline">
+            <a href="/login" className="text-blue-400 hover:underline">
               Войти
             </a>
           </p>

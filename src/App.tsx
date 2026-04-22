@@ -13,6 +13,7 @@ import Events from './Events';
 import Roles from './Roles';
 import Permissions from './Permissions';
 import Login from './Login';
+import Register from './Register';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
             <Route 
               path="/dashboard" 
               element={

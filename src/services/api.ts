@@ -212,7 +212,21 @@ async function handleApiResponse<T>(response: Response, originalRequest?: () => 
 
     try {
       const errorData = await response.json();
-      error.detail = errorData.detail || error.detail;
+      const detail = errorData?.detail;
+
+      if (typeof detail === 'string') {
+        error.detail = detail;
+      } else if (Array.isArray(detail)) {
+        error.detail = detail
+          .map((item: any) => {
+            const location = Array.isArray(item?.loc) ? item.loc.join('.') : undefined;
+            const message = item?.msg || item?.message;
+            return location && message ? `${location}: ${message}` : message || JSON.stringify(item);
+          })
+          .join('; ');
+      } else if (detail && typeof detail === 'object') {
+        error.detail = (detail as any).message || JSON.stringify(detail);
+      }
     } catch {
       // Use default error message if response is not JSON
     }

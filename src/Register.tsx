@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../supabase/supabaseClient";
+import { authApi } from "./services/api";
 
 export default function Register() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,16 +19,14 @@ export default function Register() {
       return;
     }
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (error) {
-      setError(error.message);
-    } else {
-      console.log("✅ Зарегистрирован!");
-      navigate("/dashboard");
+    setIsSubmitting(true);
+    try {
+      await authApi.register({ email, password, full_name: fullName || undefined });
+      navigate("/");
+    } catch (err: any) {
+      setError(err.message || "Ошибка при регистрации");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -56,6 +56,14 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <input
+              id="fullName"
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Полное имя (необязательно)"
+              className="w-full px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <input
               id="email"
               type="email"
               value={email}
@@ -75,9 +83,10 @@ export default function Register() {
             />
             <button
               type="submit"
-              className="w-full py-2 rounded-md bg-blue-600 hover:bg-blue-700 font-medium text-sm"
+              disabled={isSubmitting}
+              className="w-full py-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed font-medium text-sm"
             >
-              Зарегистрироваться
+              {isSubmitting ? "Регистрация..." : "Зарегистрироваться"}
             </button>
           </form>
 

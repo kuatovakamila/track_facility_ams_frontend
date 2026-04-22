@@ -274,6 +274,16 @@ export const authApi = {
     return handleApiResponse<TokenResponse>(response);
   },
 
+  async register(credentials: { email: string; password: string; full_name?: string }): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    });
+
+    return handleApiResponse<void>(response);
+  },
+
   async logout(): Promise<void> {
     const makeRequest = () => makeAuthenticatedRequest(`${API_BASE_URL}/api/v1/auth/logout`, {
       method: 'POST',

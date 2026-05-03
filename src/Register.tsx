@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { authApi } from "./services/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -14,12 +16,10 @@ export default function Register() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
-
     if (!email || !password || !firstName || !lastName) {
       setError("Пожалуйста, заполните все поля.");
       return;
     }
-
     setIsSubmitting(true);
     try {
       await authApi.register({ email, password, first_name: firstName, last_name: lastName });
@@ -40,70 +40,56 @@ export default function Register() {
           <div className="text-center space-y-2">
             <h1 className="text-2xl font-bold flex items-center justify-center gap-2">
               Зарегистрируйся в
-              <img
-                src="/assets/ams.png"
-                alt="AMS Logo"
-                className="h-6 sm:h-7 md:h-8 object-contain"
-              />
+              <img src="/assets/ams.png" alt="AMS Logo" className="h-6 sm:h-7 md:h-8 object-contain" />
             </h1>
-            <p className="text-sm text-gray-400">
-              Создай свой аккаунт, чтобы начать использовать
-            </p>
+            <p className="text-sm text-gray-400">Создай свой аккаунт, чтобы начать использовать</p>
           </div>
 
-          {error && (
-            <p className="text-red-500 text-sm text-center">{error}</p>
-          )}
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex gap-3">
-              <input
+              <Input
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="Имя"
                 required
-                className="w-full px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="bg-zinc-800 border-zinc-700 text-white placeholder-gray-400 focus-visible:ring-blue-500"
               />
-              <input
+              <Input
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Фамилия"
                 required
-                className="w-full px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="bg-zinc-800 border-zinc-700 text-white placeholder-gray-400 focus-visible:ring-blue-500"
               />
             </div>
-            <input
+            <Input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="example@company.com"
               required
-              className="w-full px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="bg-zinc-800 border-zinc-700 text-white placeholder-gray-400 focus-visible:ring-blue-500"
             />
-            <input
+            <Input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Пароль"
               required
-              className="w-full px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="bg-zinc-800 border-zinc-700 text-white placeholder-gray-400 focus-visible:ring-blue-500"
             />
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full py-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed font-medium text-sm"
-            >
+            <Button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400">
               {isSubmitting ? "Регистрация..." : "Зарегистрироваться"}
-            </button>
+            </Button>
           </form>
 
           <p className="text-center text-sm text-gray-400">
             Уже есть аккаунт?{" "}
-            <a href="/login" className="text-blue-400 hover:underline">
-              Войти
-            </a>
+            <a href="/login" className="text-blue-400 hover:underline">Войти</a>
           </p>
         </div>
       </main>

@@ -53,10 +53,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const user: User = {
             id: apiUserData.id?.toString() || '1',
             email: apiUserData.email || '',
-            name: apiUserData.full_name || apiUserData.name || apiUserData.email?.split('@')[0] || 'User',
-            role: apiUserData.role || 'user'
+            name: [apiUserData.first_name, apiUserData.last_name].filter(Boolean).join(' ') || apiUserData.email?.split('@')[0] || 'User',
+            role: apiUserData.role_id?.toString() || 'user'
           };
-          
+
           // Update stored user data with fresh data from API
           localStorage.setItem('user_data', JSON.stringify(user));
           setUser(user);
@@ -105,8 +105,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const user: User = {
           id: userData.id?.toString() || '1',
           email: userData.email || email,
-          name: userData.full_name || userData.name || email.split('@')[0],
-          role: userData.role || 'user'
+          name: [userData.first_name, userData.last_name].filter(Boolean).join(' ') || email.split('@')[0],
+          role: userData.role_id?.toString() || 'user'
         };
         
         localStorage.setItem('user_data', JSON.stringify(user));

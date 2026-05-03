@@ -74,6 +74,7 @@ export interface FileMetadata {
   mime_type: string;
   uploaded_by?: number | null;
   incident_id?: number | null;
+  folder_id?: number | null;
   created_at: string;
 }
 
@@ -152,18 +153,20 @@ async function refreshAuthToken(): Promise<TokenResponse> {
 // Helper function to handle API responses with automatic token refresh
 async function handleApiResponse<T>(response: Response, originalRequest?: () => Promise<Response>): Promise<T> {
   // If unauthorized and we have a refresh token, try to refresh
-  if (response.status === 401 && originalRequest) {
+  // Backend returns 403 for "Not authenticated" (missing/expired token), not 401
+  if ((response.status === 401 || response.status === 403) && originalRequest) {
     const refreshToken = localStorage.getItem('refresh_token');
 
-    if (refreshToken && !isRefreshing) {
+    if (refreshToken) {
       try {
-        // Prevent multiple simultaneous refresh attempts
-        if (!refreshPromise) {
+        // If not already refreshing, start a new refresh
+        if (!isRefreshing) {
           isRefreshing = true;
           refreshPromise = refreshAuthToken();
         }
 
-        const tokenResponse = await refreshPromise;
+        // Wait for the refresh (either one we just started or one already in progress)
+        const tokenResponse = await refreshPromise!;
 
         // Update stored tokens
         localStorage.setItem('auth_token', tokenResponse.access_token);
@@ -189,15 +192,13 @@ async function handleApiResponse<T>(response: Response, originalRequest?: () => 
         isRefreshing = false;
         refreshPromise = null;
 
-        // Trigger auth expired callbacks for React components to handle
         triggerAuthExpired();
 
         throw new Error('Session expired. Please login again.');
       }
     } else {
-      // No refresh token or already refreshing - trigger auth expired event
+      // No refresh token at all
       localStorage.removeItem('auth_token');
-      localStorage.removeItem('refresh_token');
       localStorage.removeItem('user_data');
       triggerAuthExpired();
       throw new Error('Session expired. Please login again.');
@@ -242,6 +243,7 @@ async function makeAuthenticatedRequest(url: string, options: RequestInit = {}):
   const token = localStorage.getItem('auth_token');
   const headers = {
     'Content-Type': 'application/json',
+    'X-Tenant-Slug': 'default',
     ...(token && { 'Authorization': `Bearer ${token}` }),
     ...options.headers,
   };
@@ -594,25 +596,21 @@ export const filesApi = {
       url.searchParams.append('folder_id', folder_id.toString());
     }
 
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      headers: {
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        // Don't set Content-Type for FormData, let browser set it with boundary
-      },
-      body: formData,
-    });
-
-    return handleApiResponse<FileUploadResponse>(response, () =>
-      fetch(url.toString(), {
+    const makeUploadRequest = () => {
+      const freshToken = localStorage.getItem('auth_token');
+      return fetch(url.toString(), {
         method: 'POST',
         headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` }),
+          // Don't set Content-Type for FormData, let browser set it with boundary
+          'X-Tenant-Slug': 'default',
+          ...(freshToken && { 'Authorization': `Bearer ${freshToken}` }),
         },
         body: formData,
-      })
-    );
+      });
+    };
+
+    const response = await makeUploadRequest();
+    return handleApiResponse<FileUploadResponse>(response, makeUploadRequest);
   },
 
   async downloadFile(fileId: number): Promise<Blob> {
@@ -700,14 +698,11 @@ export const filesApi = {
   },
 
   async moveFile(fileId: number, newFolderId?: number | null): Promise<void> {
-    const makeRequest = () => makeAuthenticatedRequest(
-      `${API_BASE_URL}/api/v1/files/${fileId}/move`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({ new_folder_id: newFolderId }),
-      }
-    );
-
+    const url = new URL(`${API_BASE_URL}/api/v1/files/${fileId}/move`);
+    if (newFolderId != null) {
+      url.searchParams.append('folder_id', newFolderId.toString());
+    }
+    const makeRequest = () => makeAuthenticatedRequest(url.toString(), { method: 'PUT' });
     const response = await makeRequest();
     return handleApiResponse<void>(response, makeRequest);
   },
@@ -796,7 +791,7 @@ export const foldersApi = {
     const makeRequest = () => makeAuthenticatedRequest(
       `${API_BASE_URL}/api/v1/folders/${folderId}/move`,
       {
-        method: 'PUT',
+        method: 'POST',
         body: JSON.stringify({ new_parent_id: newParentId }),
       }
     );

@@ -1,13 +1,17 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useState, useEffect, useCallback } from 'react';
 import Layout from './components/Layout';
-import LoadingSpinner from './components/LoadingSpinner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+
 import ErrorState from './components/ErrorState';
 import SkeletonLoader from './components/SkeletonLoader';
 import { useDataContext } from './contexts/DataContext';
 import { useAppContext } from './contexts/AppContext';
-import { dashboardApi } from './services/api';
-import { mockChartData, mockDashboardStats } from './data/mockData';
+import { dashboardApi, usersApi } from './services/api';
+import { mockChartData } from './data/mockData';
 import type { AttendanceRecord, ChartDataPoint } from './types';
 
 const Dashboard = () => {
@@ -26,25 +30,47 @@ const Dashboard = () => {
   // Fetch attendance/employee data from API
   const fetchAttendanceData = useCallback(async (): Promise<AttendanceRecord[]> => {
     try {
-      // Get employee summary data from the API
-      const response = await dashboardApi.getEmployeesSummary();
-      
-      // For now, if the API doesn't return attendance records,
-      // we'll return an empty array and handle it gracefully
-      // The real implementation would depend on the actual API response structure
-      if (Array.isArray(response)) {
-        return response.map((employee: any): AttendanceRecord => ({
-          id: employee.id || Math.random(),
-          name: employee.name || 'Неизвестный сотрудник',
-          email: employee.email || '',
-          status: employee.status || 'Отсутствует',
-          details: employee.details || 'Нет данных',
-          presence: employee.present || false,
-          time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-          date: new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+      const [summary, users] = await Promise.all([
+        dashboardApi.getEmployeesSummary(),
+        usersApi.getUsers({ limit: 100 }),
+      ]);
+
+      // Set progress bars from summary
+      if (summary && typeof summary.total_employees === 'number') {
+        const total = summary.total_employees || 0;
+        const active = summary.active_employees ?? 0;
+        const rate = typeof summary.attendance_rate === 'number'
+          ? (summary.attendance_rate <= 1 ? summary.attendance_rate * 100 : summary.attendance_rate)
+          : total > 0 ? (active / total) * 100 : 0;
+        const late = typeof summary.late_percentage === 'number'
+          ? (summary.late_percentage <= 1 ? summary.late_percentage * 100 : summary.late_percentage)
+          : 0;
+        setAttendanceProgress(rate);
+        setLateProgress(late);
+      } else if (summary && typeof summary.attendance_rate === 'number') {
+        setAttendanceProgress(summary.attendance_rate <= 1 ? summary.attendance_rate * 100 : summary.attendance_rate);
+        setLateProgress(summary.late_percentage != null
+          ? (summary.late_percentage <= 1 ? summary.late_percentage * 100 : summary.late_percentage)
+          : 0);
+      }
+
+      // Build table rows from users list
+      if (Array.isArray(users) && users.length > 0) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const dateStr = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' });
+        return users.map((u: any): AttendanceRecord => ({
+          id: u.id,
+          name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email?.split('@')[0] || 'Сотрудник',
+          email: u.email || '',
+          status: u.is_active !== false ? 'Присутствует' : 'Отсутствует',
+          details: u.role?.name || u.role || 'Нет данных',
+          presence: u.is_active !== false,
+          time: timeStr,
+          date: dateStr,
         }));
       }
-      
+
       return [];
     } catch (error) {
       console.error('Failed to fetch attendance data:', error);
@@ -54,15 +80,10 @@ const Dashboard = () => {
 
   const fetchChartData = useCallback(async (): Promise<ChartDataPoint[]> => {
     try {
-      // Try to get dashboard stats for chart data
-      const response = await dashboardApi.getDashboardStats();
-      
-      // For now, return mock chart data since the API might not have specific chart format
-      // In a real implementation, you'd transform the API response to chart format
+      await dashboardApi.getDashboardStats();
       return mockChartData;
     } catch (error) {
       console.error('Failed to fetch chart data:', error);
-      // Fallback to mock data on error to ensure the dashboard doesn't break
       return mockChartData;
     }
   }, []);
@@ -89,20 +110,20 @@ const Dashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Animation for progress bars
+  // Calculate progress bars from employee array (only if backend didn't return pre-calculated stats)
   useEffect(() => {
-    if (!attendanceLoading && attendance) {
+    if (!attendanceLoading && attendance && attendance.length > 0) {
       const timer1 = setTimeout(() => {
         const totalEmployees = attendance.length;
         const presentEmployees = attendance.filter(person => person.presence).length;
-        const attendancePercentage = totalEmployees > 0 ? (presentEmployees / totalEmployees) * 100 : 0;
+        const attendancePercentage = (presentEmployees / totalEmployees) * 100;
         setAttendanceProgress(isNaN(attendancePercentage) ? 0 : attendancePercentage);
       }, 300);
-      
+
       const timer2 = setTimeout(() => {
         const totalEmployees = attendance.length;
         const lateEmployees = attendance.filter((person: AttendanceRecord) => person.status === 'late').length;
-        const latePercentage = totalEmployees > 0 ? (lateEmployees / totalEmployees) * 100 : 0;
+        const latePercentage = (lateEmployees / totalEmployees) * 100;
         setLateProgress(isNaN(latePercentage) ? 0 : latePercentage);
       }, 600);
 
@@ -318,66 +339,54 @@ const Dashboard = () => {
                 <p className="text-gray-400 text-base">Всего записей: {attendance?.length || 0}</p>
               </div>
               <div className="flex flex-1 justify-end items-center gap-2">
-                {/* Поиск */}
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                     <svg width="20" height="20" fill="none"><circle cx="9" cy="9" r="7" stroke="#BDBDBD" strokeWidth="2"/><path d="M15 15L19 19" stroke="#BDBDBD" strokeWidth="2" strokeLinecap="round"/></svg>
                   </span>
-                  <input
-                    type="text"
-                    placeholder="Поиск"
-                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition w-48"
-                  />
+                  <Input type="text" placeholder="Поиск" className="pl-10 w-48" />
                 </div>
-                {/* Кнопки */}
-                <button className="px-5 py-2 bg-[#014596] text-white rounded-lg text-base font-medium hover:bg-blue-700 transition disabled:opacity-50">Экспорт</button>
-                <button className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg text-base font-medium hover:bg-gray-50 transition disabled:opacity-50">Фильтр</button>
+                <Button>Экспорт</Button>
+                <Button variant="outline">Фильтр</Button>
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px]">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Сотрудник</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Детали</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Время</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Сотрудник</TableHead>
+                    <TableHead>Статус</TableHead>
+                    <TableHead>Детали</TableHead>
+                    <TableHead>Время</TableHead>
+                    <TableHead>Дата</TableHead>
+                    <TableHead>Действия</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {attendance?.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="text-center text-gray-400 py-8 text-base">Нет данных для отображения</td>
-                    </tr>
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-gray-400 py-8 text-base">Нет данных для отображения</TableCell>
+                    </TableRow>
                   ) : (
                     attendance?.map((person: AttendanceRecord) => (
-                      <tr key={person.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                      <TableRow key={person.id}>
+                        <TableCell>
                           <div className="text-sm font-medium text-gray-900">{person.name}</div>
                           <div className="text-sm text-gray-500">{person.email}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                            person.presence 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {person.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{person.details}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{person.time}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{person.date}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <button className="text-blue-900 hover:text-blue-700 text-sm font-medium">Изменить</button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={person.presence ? 'success' : 'destructive'}>{person.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-500">{person.details}</TableCell>
+                        <TableCell className="text-sm text-gray-900">{person.time}</TableCell>
+                        <TableCell className="text-sm text-gray-500">{person.date}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" className="text-blue-900 hover:text-blue-700">Изменить</Button>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </div>
         </>
